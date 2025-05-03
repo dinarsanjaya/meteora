@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meteora Wallet Points Checker</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        h1 {
+            color: #3a3a3a;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .container {
+            background-color: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-family: monospace;
+            resize: vertical;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #results {
+            margin-top: 30px;
+        }
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .result-table th, .result-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        .result-table th {
+            background-color: #f2f2f2;
+        }
+        .result-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid #4CAF50;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            color: #d32f2f;
+            font-weight: bold;
+        }
+        .success {
+            color: #4CAF50;
+        }
+        .instructions {
+            background-color: #e9f7ef;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .points-cell {
+            text-align: right;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Meteora Wallet Points Checker</h1>
+        
+        <div class="instructions">
+            <p><strong>How to use:</strong></p>
+            <ol>
+                <li>Enter Solana wallet addresses (one per line) in the text area below</li>
+                <li>Click "Check Points" button</li>
+                <li>View results in the table below</li>
+            </ol>
+            <p>API endpoint: <code>https://point-api.meteora.ag/points/&#123;wallet&#125;</code></p>
+        </div>
+        
+        <textarea id="walletInput" placeholder="Enter Solana wallet addresses, one per line (e.g. GFR..............aQ)"></textarea>
+        
+        <button id="checkButton">Check Points</button>
+        <button id="clearButton">Clear All</button>
+        
+        <div class="loading" id="loadingIndicator">
+            <div class="loading-spinner"></div>
+            <p>Checking wallets, please wait...</p>
+        </div>
+        
+        <div id="results">
+            <h2>Results</h2>
+            <div id="resultCount"></div>
+            <table class="result-table">
+                <thead>
+                    <tr>
+                        <th>Wallet Address</th>
+                        <th>Points</th>
+                        <th>24h Points</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="resultTableBody">
+                    <!-- Results will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const walletInput = document.getElementById('walletInput');
+            const checkButton = document.getElementById('checkButton');
+            const clearButton = document.getElementById('clearButton');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const resultTableBody = document.getElementById('resultTableBody');
+            const resultCount = document.getElementById('resultCount');
+            
+            checkButton.addEventListener('click', checkWallets);
+            clearButton.addEventListener('click', clearAll);
+            
+            async function checkWallets() {
+                const walletAddresses = walletInput.value.split('\n')
+                    .map(w => w.trim())
+                    .filter(w => w.length > 0);
+                
+                if (walletAddresses.length === 0) {
+                    alert('Please enter at least one wallet address');
+                    return;
+                }
+                
+                // Show loading indicator
+                loadingIndicator.style.display = 'block';
+                checkButton.disabled = true;
+                resultTableBody.innerHTML = '';
+                resultCount.textContent = '';
+                
+                try {
+                    const results = [];
+                    
+                    for (const wallet of walletAddresses) {
+                        try {
+                            const response = await fetch(`https://point-api.meteora.ag/points/${wallet}`);
+                            if (response.ok) {
+                                const data = await response.json();
+                                results.push({
+                                    wallet,
+                                    total_points: data.total_points || 0,
+                                    last_24h_points: data.last_24h_points || 0,
+                                    status: 'success'
+                                });
+                            } else {
+                                const errorData = await response.json().catch(() => ({}));
+                                results.push({
+                                    wallet,
+                                    total_points: 0,
+                                    last_24h_points: 0,
+                                    message: errorData.message || `Error: ${response.status}`,
+                                    status: 'error'
+                                });
+                            }
+                        } catch (error) {
+                            results.push({
+                                wallet,
+                                total_points: 0,
+                                last_24h_points: 0,
+                                message: `Error: ${error.message}`,
+                                status: 'error'
+                            });
+                        }
+                    }
+                    
+                    displayResults(results);
+                } catch (error) {
+                    console.error('Error checking wallets:', error);
+                    alert('An error occurred while checking wallets');
+                } finally {
+                    loadingIndicator.style.display = 'none';
+                    checkButton.disabled = false;
+                }
+            }
+            
+            function displayResults(results) {
+                resultTableBody.innerHTML = '';
+                
+                let successCount = 0;
+                let errorCount = 0;
+                let totalPoints = 0;
+                let total24hPoints = 0;
+                
+                results.forEach(result => {
+                    const row = document.createElement('tr');
+                    
+                    // Wallet Address
+                    const walletCell = document.createElement('td');
+                    walletCell.textContent = result.wallet;
+                    row.appendChild(walletCell);
+                    
+                    // Total Points
+                    const pointsCell = document.createElement('td');
+                    pointsCell.textContent = result.total_points.toLocaleString(undefined, {maximumFractionDigits: 2});
+                    pointsCell.className = 'points-cell';
+                    if (result.status === 'success') {
+                        totalPoints += result.total_points;
+                    }
+                    row.appendChild(pointsCell);
+                    
+                    // 24h Points
+                    const points24hCell = document.createElement('td');
+                    points24hCell.textContent = result.last_24h_points.toLocaleString(undefined, {maximumFractionDigits: 2});
+                    points24hCell.className = 'points-cell';
+                    if (result.status === 'success') {
+                        total24hPoints += result.last_24h_points;
+                    }
+                    row.appendChild(points24hCell);
+                    
+                    // Status
+                    const statusCell = document.createElement('td');
+                    if (result.status === 'success') {
+                        statusCell.textContent = 'Success';
+                        statusCell.className = 'success';
+                        successCount++;
+                    } else {
+                        statusCell.textContent = result.message || 'Error';
+                        statusCell.className = 'error';
+                        errorCount++;
+                    }
+                    row.appendChild(statusCell);
+                    
+                    resultTableBody.appendChild(row);
+                });
+                
+                resultCount.innerHTML = `
+                    Checked ${results.length} wallets: 
+                    <span class="success">${successCount} successful</span>, 
+                    <span class="error">${errorCount} failed</span>.
+                    <br>Total points: <strong>${totalPoints.toLocaleString(undefined, {maximumFractionDigits: 2})}</strong>
+                    <br>Total 24h points: <strong>${total24hPoints.toLocaleString(undefined, {maximumFractionDigits: 2})}</strong>
+                `;
+            }
+            
+            function clearAll() {
+                walletInput.value = '';
+                resultTableBody.innerHTML = '';
+                resultCount.textContent = '';
+            }
+        });
+    </script>
+</body>
+</html>
